@@ -156,8 +156,12 @@ class UpdateSeason(Action):
         parser.add_argument('-W', '--write', help='actually write data (as opposed to just printing what would write)', default=False, action='store_true')
         parser.add_argument('-p', '--use_production_code', help='use production code as episode number', default=False, action='store_true')
         parser.add_argument('-o', '--omit', help='skip episode number (specify multiple times)', action='append', type=int)
+        parser.add_argument('-P', '--force_ep_number', help='force episode number for an item to be a specific value eg. "12:17". Forces API data episode "12" to be used as episode "17"', action='append')
 
-    def run(self):
+    def run(self):  # noqa ignore:C901
+        self.forced_numbers = {}
+        if self.force_ep_number:
+            self.forced_numbers = dict((int(y[0]), int(y[1])) for y in [x.split(':') for x in self.force_ep_number])
         t = TVDB(self.apikey)
         tdata = t.series_query(self.series_id, self.season)['data']
         if self.use_production_code:
@@ -165,7 +169,14 @@ class UpdateSeason(Action):
             new_tdata = []
             for i in tdata:
                 new = t.episode(i['id'])['data']
-                new['production_episode_number'] = pc.search(new['productionCode']).group(1)
+                try:
+                    new['production_episode_number'] = pc.search(new['productionCode']).group(1)
+                except:
+                    try:
+                        new['production_episode_number'] = self.forced_numbers[new['airedEpisodeNumber']]
+                    except:
+                        from pprint import pprint as pp; pp(new)
+                        raise
                 new_tdata.append(new)
             tdata = new_tdata
 
