@@ -3,6 +3,7 @@
 import requests
 import sys
 import re
+from pprint import pprint as pp
 from argparse import ArgumentParser
 from bs4 import BeautifulSoup as BS
 from plex.utils.datasource.thetvdb import TVDB
@@ -120,6 +121,7 @@ class List(Action):
                         fmt_string += "\t{{{ef}:>20}}".format(ef=ef)
                 print fmt_string.format(key=key, title=video['title'].encode('utf8'), titleSort=video.get('titleSort', '').encode('utf8'), **extra)
         else:
+            print body
             raise Exception("Unknown Section type")
 
 
@@ -129,7 +131,7 @@ class GetFile(Action):
 
     def run(self):
         body = BS(self.get('/library/metadata/{{item_id}}'), 'xml')
-        print body.MediaContainer.Video.Media.Part['file']
+        print body.MediaContainer.Video.Media.Part['file'].encode('utf-8')
 
 
 class Update(Action):
@@ -165,18 +167,20 @@ class UpdateSeason(Action):
         t = TVDB(self.apikey)
         tdata = t.series_query(self.series_id, self.season)['data']
         if self.use_production_code:
-            pc = re.compile(r'(\d\d)$')
+            pc = re.compile(r'(\d\d)H?$')
             new_tdata = []
             for i in tdata:
                 new = t.episode(i['id'])['data']
-                try:
-                    new['production_episode_number'] = pc.search(new['productionCode']).group(1)
-                except:
+                if self.forced_numbers and self.forced_numbers.get(new['airedEpisodeNumber'], False):
+                    new['production_episode_number'] = self.forced_numbers[new['airedEpisodeNumber']]
+                    # print "Setting %d to %d: %s" % (new['airedEpisodeNumber'], self.forced_numbers[new['airedEpisodeNumber']], new['episodeName'])
+                else:
                     try:
-                        new['production_episode_number'] = self.forced_numbers[new['airedEpisodeNumber']]
+                        new['production_episode_number'] = pc.search(new['productionCode']).group(1)
                     except:
-                        from pprint import pprint as pp; pp(new)
-                        raise
+                        new['production_episode_number'] = new['airedEpisodeNumber']
+                        # pp(new)
+                        # raise
                 new_tdata.append(new)
             tdata = new_tdata
 
@@ -191,7 +195,12 @@ class UpdateSeason(Action):
                 continue
 
             if self.use_production_code:
-                tv_video = filter(lambda x: int(x['production_episode_number']) == int(video['index']), tdata)[0]
+                try:
+                    tv_video = filter(lambda x: int(x['production_episode_number']) == int(video['index']), tdata)[0]
+                except:
+                    print "Video: %d: %s" % (int(video['index']), video['title'])
+                    pp([(x['airedEpisodeNumber'], x['production_episode_number'], x['episodeName']) for x in tdata])
+                    raise
             else:
                 tv_video = filter(lambda x: int(x['airedEpisodeNumber']) == int(video['index']), tdata)[0]
             update = {}
@@ -245,3 +254,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
