@@ -120,6 +120,8 @@ class List(Action):
                         extra[ef] = value
                         fmt_string += "\t{{{ef}:>20}}".format(ef=ef)
                 print fmt_string.format(key=key, title=video['title'].encode('utf8'), titleSort=video.get('titleSort', '').encode('utf8'), **extra)
+        elif body.html.head.title.text == "Unauthorized":
+            raise Exception("Unauthorized: The Plex Token probably changed")
         else:
             print body
             raise Exception("Unknown Section type")
